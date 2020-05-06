@@ -2,7 +2,6 @@ package com.gooyuanly.kafka.metrics.collector.jmx;
 
 import com.google.common.collect.Lists;
 import com.ke.streaming.common.tuple.Tuple2;
-import com.ke.streaming.common.utils.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,8 +50,9 @@ public class JmxConnection {
                     return Lists.newArrayList(new Tuple2<>(beanName, value));
                 }
             } catch (IOException e) {
-                logger.info("查询失败，重新连接：{}", i);
+                logger.info("{} 查询失败，重新连接：{}", host, i);
                 reconnect();
+                logger.info("after reconnect");
                 i++;
             }
         }

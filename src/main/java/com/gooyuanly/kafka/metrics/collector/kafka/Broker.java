@@ -1,17 +1,21 @@
 package com.gooyuanly.kafka.metrics.collector.kafka;
 
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.gooyuanly.kafka.metrics.collector.jmx.JmxConnection;
 import com.gooyuanly.kafka.metrics.collector.jmx.JmxMetricItem;
 import com.gooyuanly.kafka.metrics.collector.jmx.JmxMonitorItem;
-import com.ke.streaming.common.tuple.Tuple2;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import javax.management.InstanceNotFoundException;
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * @author: hy
@@ -19,10 +23,13 @@ import java.util.stream.Stream;
  * desc:
  */
 public class Broker implements Closeable {
+    private static final Logger logger = LoggerFactory.getLogger(Broker.class);
     private int id;
     private String host;
     private int port;
     private JmxConnection jmxConnection;
+
+    private Set<String> blacklist;
 
     public Broker(int id, String host, int port, int jmxPort) throws Exception {
         this.id = id;
@@ -33,6 +40,7 @@ public class Broker implements Closeable {
         }
         this.jmxConnection = new JmxConnection(host, jmxPort);
         this.jmxConnection.open();
+        this.blacklist = Sets.newConcurrentHashSet();
     }
 
     public int getId() {
@@ -48,6 +56,9 @@ public class Broker implements Closeable {
     }
 
     public List<JmxMetricItem> poll(JmxMonitorItem item, long timestamp) {
+        if (blacklist.contains(item.getBeanName())) {
+            return Collections.emptyList();
+        }
         try {
             return jmxConnection.getAttribution(item.getBeanName(), item.getAttribution())
                     .stream()
@@ -70,8 +81,14 @@ public class Broker implements Closeable {
 
                         return new JmxMetricItem(name, tags, timestamp, tuple.f2());
                     }).collect(Collectors.toList());
+        } catch(InstanceNotFoundException e) {
+            blacklist.add(item.getBeanName());
+            logger.info("添加黑名单：{}", item.getBeanName());
+            return Collections.emptyList();
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            //throw new RuntimeException(e);
+            logger.error("getAttribution error", e);
+            return Collections.emptyList();
         }
     }
 
