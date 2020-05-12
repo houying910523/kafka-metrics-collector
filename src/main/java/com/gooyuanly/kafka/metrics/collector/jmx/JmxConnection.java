@@ -2,6 +2,7 @@ package com.gooyuanly.kafka.metrics.collector.jmx;
 
 import com.google.common.collect.Lists;
 import com.ke.streaming.common.tuple.Tuple2;
+import com.ke.streaming.common.utils.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,7 +77,7 @@ public class JmxConnection {
     }
 
     public void close() throws IOException {
-        connector.close();
+        IOUtils.closeQuietly(connector);
     }
 
     private void reconnect() throws IOException {
