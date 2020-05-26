@@ -1,5 +1,7 @@
 package com.gooyuanly.kafka.metrics.collector.kafka;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.gooyuanly.kafka.metrics.collector.jmx.JmxConnection;
@@ -15,6 +17,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -29,7 +32,8 @@ public class Broker implements Closeable {
     private int port;
     private JmxConnection jmxConnection;
 
-    private Set<String> blacklist;
+    private Cache<String, Integer> blacklist;
+
 
     public Broker(int id, String host, int port, int jmxPort) throws Exception {
         this.id = id;
@@ -40,7 +44,7 @@ public class Broker implements Closeable {
         }
         this.jmxConnection = new JmxConnection(host, jmxPort);
         this.jmxConnection.open();
-        this.blacklist = Sets.newConcurrentHashSet();
+        this.blacklist = CacheBuilder.newBuilder().expireAfterWrite(30, TimeUnit.MINUTES).build();
     }
 
     public int getId() {
@@ -56,7 +60,7 @@ public class Broker implements Closeable {
     }
 
     public List<JmxMetricItem> poll(JmxMonitorItem item, long timestamp) {
-        if (blacklist.contains(item.getBeanName())) {
+        if (blacklist.getIfPresent(item.getBeanName()) == null) {
             return Collections.emptyList();
         }
         try {
@@ -82,8 +86,8 @@ public class Broker implements Closeable {
                         return new JmxMetricItem(name, tags, timestamp, tuple.f2());
                     }).collect(Collectors.toList());
         } catch(InstanceNotFoundException e) {
-            blacklist.add(item.getBeanName());
-            logger.info("添加黑名单：{}", item.getBeanName());
+            blacklist.put(item.getBeanName(), 1);
+            logger.info("{} 添加黑名单：{}", host, item.getBeanName());
             return Collections.emptyList();
         } catch (Exception e) {
             //throw new RuntimeException(e);
